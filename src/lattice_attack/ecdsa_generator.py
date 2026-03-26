@@ -14,6 +14,10 @@ def generate_biased_signatures(
     """Gen ECDSA sigs """
     d = sage.ZZ(private_key) % N
 
+# Generate the shared part of the nonce
+    fixed_prefix_64lsb = sage.ZZ.random_element(2**(256 - 64)) << 64
+    fixed_suffix_128msb = sage.ZZ.random_element(2**128)
+    fixed_suffix_224msb = sage.ZZ.random_element(2**224)
     signatures = []
     for i in range(num_sigs):
         # === Biased nonce k ===
@@ -21,12 +25,16 @@ def generate_biased_signatures(
             bitlen_str = bias_type.split("_")[1]
             bitlen = int(bitlen_str.replace("bit", ""))
             k = sage.ZZ.random_element(2**bitlen)
+            
         elif bias_type == "shared_prefix_64lsb":
-            k = (sage.ZZ.random_element(2**(256 - 64)) << 64) | sage.ZZ.random_element(2**64)
+            k = fixed_prefix_64lsb | sage.ZZ.random_element(2**64)
+            
         elif bias_type == "shared_suffix_128msb":
-            k = sage.ZZ.random_element(2**128) | (sage.ZZ.random_element(2**(256-128)) << 128)
+            k = (sage.ZZ.random_element(2**(256-128)) << 128) | fixed_suffix_128msb
+            
         elif bias_type == "shared_suffix_224msb":
-            k = sage.ZZ.random_element(2**224) | (sage.ZZ.random_element(2**(256-224)) << 224)
+            k = (sage.ZZ.random_element(2**(256-224)) << 224) | fixed_suffix_224msb
+            
         else:
             raise ValueError(f"Unknown bias_type: {bias_type}")
 
