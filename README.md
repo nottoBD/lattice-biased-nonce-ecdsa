@@ -51,7 +51,7 @@ check_nonce_bias(args.csv, args.key, args.bias)
 ```
 
 --- 
-## Quickstart Ubuntu 20.04
+## Quickstart Ubuntu 24.04
 
 ### Install with conda
 
