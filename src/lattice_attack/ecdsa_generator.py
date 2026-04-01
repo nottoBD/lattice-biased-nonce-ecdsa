@@ -2,57 +2,64 @@ import csv
 import sage.all as sage
 from .constants import P, N, G_X, G_Y
 
-E = sage.EllipticCurve(sage.GF(sage.ZZ(P)), [0, 7]) # secp256k1
+E = sage.EllipticCurve(sage.GF(sage.ZZ(P)), [0, 7])
 G = E(G_X, G_Y)
 
 def generate_biased_signatures(
     private_key: int,
     num_sigs: int = 80,
-    bias_type: str = "short_128bit",
-    output_csv: str = "data/raw/biased_signatures.csv",
+    bias_type: str = "known_msb",
+    param: int = 128,
+    output_csv: str = None,
 ):
-    """Gen ECDSA sigs """
+    """Generate ECDSA signatures with one of the three most common biases
+    (Nguyen-Shparlinski 2003 partial nonce leakage)."""
     d = sage.ZZ(private_key) % N
-
-# Generate the shared part of the nonce
-    fixed_prefix_64lsb = sage.ZZ.random_element(2**(256 - 64)) << 64
-    fixed_suffix_128msb = sage.ZZ.random_element(2**128)
-    fixed_suffix_224msb = sage.ZZ.random_element(2**224)
     signatures = []
-    for i in range(num_sigs):
-        # === Biased nonce k ===
-        if bias_type.startswith("short_"):
-            bitlen_str = bias_type.split("_")[1]
-            bitlen = int(bitlen_str.replace("bit", ""))
+
+    if output_csv is None:
+        output_csv = f"data/raw/biased_signatures_{bias_type}_{param}.csv"
+
+    if bias_type == "known_msb":
+        b = 256 - param
+        for i in range(num_sigs):
+            k = sage.ZZ.random_element(1, N)
+            k_known = k >> b
+            R_point = (k * G).xy()[0]
+            r = sage.ZZ(R_point) % N
+            h = sage.ZZ(i) % N
+            s = (sage.inverse_mod(k, N) * (h + d * r)) % N
+            signatures.append((int(r), int(s), int(h), int(k_known)))
+
+    elif bias_type == "short":
+        bitlen = param
+        for i in range(num_sigs):
             k = sage.ZZ.random_element(2**bitlen)
-            
-        elif bias_type == "shared_prefix_64lsb":
-            k = fixed_prefix_64lsb | sage.ZZ.random_element(2**64)
-            
-        elif bias_type == "shared_suffix_128msb":
-            k = (sage.ZZ.random_element(2**(256-128)) << 128) | fixed_suffix_128msb
-            
-        elif bias_type == "shared_suffix_224msb":
-            k = (sage.ZZ.random_element(2**(256-224)) << 224) | fixed_suffix_224msb
-            
-        else:
-            raise ValueError(f"Unknown bias_type: {bias_type}")
+            R_point = (k * G).xy()[0]
+            r = sage.ZZ(R_point) % N
+            h = sage.ZZ(i) % N
+            s = (sage.inverse_mod(k, N) * (h + d * r)) % N
+            signatures.append((int(r), int(s), int(h), int(k)))
 
-        # ECDSA signature
-        R_point = (k * G).xy()[0]
-        R = sage.ZZ(R_point) % N
-        r = int(R)
-        h = sage.ZZ(i) % N
-        s = (sage.inverse_mod(k, N) * (h + d * r)) % N
+    elif bias_type == "shared_suffix":
+        suffix_bits = param
+        fixed_suffix = sage.ZZ.random_element(2**suffix_bits)
+        for i in range(num_sigs):
+            high = sage.ZZ.random_element(2**(256 - suffix_bits))
+            k = (high << suffix_bits) | fixed_suffix
+            R_point = (k * G).xy()[0]
+            r = sage.ZZ(R_point) % N
+            h = sage.ZZ(i) % N
+            s = (sage.inverse_mod(k, N) * (h + d * r)) % N
+            signatures.append((int(r), int(s), int(h), int(fixed_suffix)))
 
-        signatures.append((r, int(s), int(h)))
+    else:
+        raise ValueError(f"Unknown bias_type: {bias_type}. Use 'known_msb', 'short', or 'shared_suffix'.")
 
-    # save csv
     with open(output_csv, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["r", "s", "h"])
+        writer.writerow(["r", "s", "h", "known_part"])
         writer.writerows(signatures)
 
-    print(f"Generated {num_sigs} biased signatures ({bias_type}) → {output_csv}")
+    print(f"Generated {num_sigs} signatures with bias '{bias_type}' (param={param}) → {output_csv}")
     return signatures
-

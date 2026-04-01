@@ -1,56 +1,22 @@
 # Lattice-Biased-Nonce-ECDSA
 
-Reproduction of **biased nonce generation** from the paper  
-**Biased Nonce Sense: Lattice Attacks against Weak ECDSA Signatures in Cryptocurrencies**  
-Joachim Breitner & Nadia Heninger (Financial Cryptography 2019).
+**Phase 2 – Artificial Biased Signature Generation**  
+Reproduction of partial nonce leakage for the main research paper:  
+**P. Q. Nguyen and I. E. Shparlinski, “The Insecurity of the Elliptic Curve Digital Signature Algorithm with Partially Known Nonces”, Designs, Codes and Cryptography, 2003.**
 
-**Phase 2 of our group project** => Env + artificial biased signature generation
+The generator creates valid ECDSA signatures on secp256k1 while artificially introducing one of three common nonce biases. Each bias matches the theoretical setting analysed in the paper (known consecutive bits of the nonce \(k\)).
 
-## Tested on
-- **Arch-based Linux**
-- SageMath 3.14.3  
+## Supported Bias Types
+The generator currently supports the **three most common and practically relevant biases**:
 
-**Note:** On other Linux distributions the SageMath commands may differ (e.g. `sage --python` or `sage --pip`).  
-The commands below work reliably on Arch-based Linux.
+| Bias Type       | Description                                      | `--param` meaning                  | Example command                              |
+|-----------------|--------------------------------------------------|------------------------------------|----------------------------------------------|
+| `known_msb`     | Top bits of each nonce are known (core case)     | Number of known MSB bits           | `--bias known_msb --param 160`               |
+| `short`         | Nonce is chosen from a small range               | Maximum bit length of nonce        | `--bias short --param 128`                   |
+| `shared_suffix` | Lowest bits are identical across all nonces      | Number of shared LSB bits          | `--bias shared_suffix --param 128`           |
 
-## Quick Start
+Each run produces a **dedicated CSV file** named `data/raw/biased_signatures_{bias_type}_{param}.csv`
 
-### 1. Install SageMath
-```bash
-sudo pacman -S sagemath
-```
-
-### 2. Generate biased signatures
-```bash
-sage -c '
-import sys
-sys.path.insert(0, ".")
-from src.lattice_attack.ecdsa_generator import generate_biased_signatures
-generate_biased_signatures(
-    private_key=0x123456789ABCDEF0123456789ABCDEF0,
-    num_sigs=80,
-    bias_type="short_128bit"
-)
-'
-```
-
-### 3. Verify nonce bias
-```bash
-sage -c '
-import sys
-sys.path.insert(0, ".")
-import argparse
-from scripts.check_nonce_bias import check_nonce_bias
-parser = argparse.ArgumentParser()
-parser.add_argument("--csv", default="data/raw/biased_signatures.csv")
-parser.add_argument("--key", type=int, default=0x123456789ABCDEF0123456789ABCDEF0)
-parser.add_argument("--bias", default="short_128bit")
-args = parser.parse_args(["--bias", "short_128bit"])
-check_nonce_bias(args.csv, args.key, args.bias)
-'
-```
-
---- 
 ## Quickstart Ubuntu 24.04
 
 ### Install with conda
@@ -107,49 +73,28 @@ Now retry to install SageMath with conda
 conda install -c conda-forge sage -y
 ```
 
-You can now start the project like this : 
-Parameters : 
-- --num Numbers of signature generated
-- --bias Type of signature generated
-    - short_{length}bit (e.g., short_128bit, short_64bit)
-    - shared_prefix_64lsb
-    - shared_suffix_128msb
-    - shared_suffix_224msb
-    - Unknow bias throw error
-
+Generate biased signatures
 ```bash
-python -m scripts.generate_biased_signatures --bias short_128bit --num 80
+python -m scripts.generate_partial_known --bias known_msb --param 160 --num 80
+python -m scripts.generate_partial_known --bias short --param 128 --num 80
+python -m scripts.generate_partial_known --bias shared_suffix --param 128 --num 80
 ```
 
-Output : 
+Check output
 ```bash
-Generated 80 biased signatures (short_128bit) → data/raw/biased_signatures.csv
+# 1. Check the known_msb with 160 bits file
+sage -python -m scripts.check_biased_signatures \
+  --csv data/raw/biased_signatures_known_msb_160.csv \
+  --bias known_msb --param 160
+
+# 2. Check the short bias file
+sage -python -m scripts.check_biased_signatures \
+  --csv data/raw/biased_signatures_short_128.csv \
+  --bias short --param 128
+
+# 3. Check the shared suffix bias file
+sage -python -m scripts.check_biased_signatures \
+  --csv data/raw/biased_signatures_shared_suffix_128.csv \
+  --bias shared_suffix --param 128
 ```
-
-Check the output
-```bash
-python -m scripts.check_nonce_bias --bias short_128bit
-```
-Output :
-```bash
-Nonce bias check for short_128bit (80 signatures)
-   Expected bias type : short_128bit
-   Min nonce bits     : 124
-   Max nonce bits     : 128
-   Average nonce bits : 127.2
-   All nonces ≤ 128 bits? : YES
-   All nonces have exactly the same MSB? : NO
-
-```
-
----
-
-Supported bias types
-
-- short_64bit, short_110bit, short_128bit, short_160bit
-- shared_prefix_64lsb
-- shared_suffix_128msb
-- shared_suffix_224msb
-
-(Change the bias_type= line in Gen command)
 
