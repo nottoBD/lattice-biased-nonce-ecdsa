@@ -4,24 +4,29 @@
 P. Q. Nguyen and I. E. Shparlinski, “The Insecurity of the Elliptic Curve Digital Signature Algorithm with Partially Known Nonces”, Designs, Codes and Cryptography, 2003.
 
 ## Biases Currently Implemented
-The generator supports the **three most common and practically relevant bias families**:
+The generator supports four nonce leakage families, with `known_lsb` as the default paper-facing experiment mode:
 
-1. **`known_msb`** (core theoretical bias from the main paper)  
+1. **`known_lsb`** (default paper-aligned mode)  
+   - The lowest `param` bits of each nonce are known (leaked).  
+   - Example: `--bias known_lsb --param 160` → 160 least-significant bits leaked per nonce.  
+   - The CSV `known_part` column stores \(\alpha = k \bmod 2^{\text{param}}\).
+
+2. **`known_msb`** (symmetric high-bit leakage mode)  
    - The top `param` bits of each nonce are known (leaked).  
-   - Example: `--bias known_msb --param 160` → 160 most-significant bits leaked per nonce.  
-   - Directly realises the “partially known nonces” setting analysed in the paper.
+   - Example: `--bias known_msb --param 160` → 160 most-significant bits leaked per nonce.
 
-2. **`short`** (most frequent real-world bias)  
+3. **`short`** (most frequent real-world bias)  
    - Nonce \(k\) is chosen uniformly from \([0, 2^{\text{param}}-1]\).  
    - Example: `--bias short --param 128` → all nonces are at most 128 bits long (equivalent to known MSB = 0).  
    - Matches the short-nonce vulnerabilities commonly found in practice.
 
-3. **`shared_suffix`** (second most common real-world bias)  
+4. **`shared_suffix`** (second most common real-world bias)  
    - The lowest `param` bits of every nonce are identical (fixed suffix).  
    - Example: `--bias shared_suffix --param 128` → all nonces share the same 128-bit suffix while the upper bits are random.  
 
 Each bias is controlled by the `--param` argument (number of known/leaked bits or bit-length).  
 The CSV output always contains a column `known_part` holding exactly the leaked information for the chosen bias.
+The generator rejects invalid ECDSA edge cases and resamples until every record satisfies \(1 \le k < N\), \(r \ne 0\), and \(s \ne 0\).
 
 ## Output Format
 - File naming is automatic: `data/raw/biased_signatures_{bias_type}_{param}.csv`  
@@ -31,7 +36,6 @@ The CSV output always contains a column `known_part` holding exactly the leaked 
 
 ## Other Biases That Could Be Added
 
-- known_lsb – known least-significant bits (symmetric to known_msb).
 - shared_prefix – identical high bits across all nonces.
 - known_middle – any consecutive block of bits at an arbitrary offset inside the 256-bit nonce.
 - low_hamming_weight – nonces with few 1-bits.

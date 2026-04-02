@@ -4,14 +4,15 @@
 Reproduction of partial nonce leakage for the main research paper:  
 **P. Q. Nguyen and I. E. Shparlinski, “The Insecurity of the Elliptic Curve Digital Signature Algorithm with Partially Known Nonces”, Designs, Codes and Cryptography, 2003.**
 
-The generator creates valid ECDSA signatures on secp256k1 while artificially introducing one of three common nonce biases. Each bias matches the theoretical setting analysed in the paper (known consecutive bits of the nonce \(k\)).
+The generator creates valid ECDSA signatures on secp256k1 while artificially introducing one of four nonce leakage modes. The default experiment mode is `known_lsb`, which stores the leaked least-significant bits of each nonce in the CSV `known_part` column.
 
 ## Supported Bias Types
-The generator currently supports the **three most common and practically relevant biases**:
+The generator currently supports the following biases:
 
 | Bias Type       | Description                                      | `--param` meaning                  | Example command                              |
 |-----------------|--------------------------------------------------|------------------------------------|----------------------------------------------|
-| `known_msb`     | Top bits of each nonce are known (core case)     | Number of known MSB bits           | `--bias known_msb --param 160`               |
+| `known_lsb`     | Lowest bits of each nonce are known (default)    | Number of leaked LSB bits          | `--bias known_lsb --param 160`               |
+| `known_msb`     | Top bits of each nonce are known                 | Number of known MSB bits           | `--bias known_msb --param 160`               |
 | `short`         | Nonce is chosen from a small range               | Maximum bit length of nonce        | `--bias short --param 128`                   |
 | `shared_suffix` | Lowest bits are identical across all nonces      | Number of shared LSB bits          | `--bias shared_suffix --param 128`           |
 
@@ -75,6 +76,7 @@ conda install -c conda-forge sage -y
 
 Generate biased signatures
 ```bash
+python -m scripts.generate_partial_known --bias known_lsb --param 160 --num 80
 python -m scripts.generate_partial_known --bias known_msb --param 160 --num 80
 python -m scripts.generate_partial_known --bias short --param 128 --num 80
 python -m scripts.generate_partial_known --bias shared_suffix --param 128 --num 80
@@ -82,19 +84,23 @@ python -m scripts.generate_partial_known --bias shared_suffix --param 128 --num 
 
 Check output
 ```bash
-# 1. Check the known_msb with 160 bits file
+# 1. Check the default paper-aligned known_lsb file
+sage -python -m scripts.check_biased_signatures \
+  --csv data/raw/biased_signatures_known_lsb_160.csv \
+  --bias known_lsb --param 160
+
+# 2. Check the known_msb with 160 bits file
 sage -python -m scripts.check_biased_signatures \
   --csv data/raw/biased_signatures_known_msb_160.csv \
   --bias known_msb --param 160
 
-# 2. Check the short bias file
+# 3. Check the short bias file
 sage -python -m scripts.check_biased_signatures \
   --csv data/raw/biased_signatures_short_128.csv \
   --bias short --param 128
 
-# 3. Check the shared suffix bias file
+# 4. Check the shared suffix bias file
 sage -python -m scripts.check_biased_signatures \
   --csv data/raw/biased_signatures_shared_suffix_128.csv \
   --bias shared_suffix --param 128
 ```
-
