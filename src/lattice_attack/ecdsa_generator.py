@@ -41,9 +41,15 @@ def _sample_shared_suffix_nonce(suffix_bits: int, fixed_suffix: sage.Integer):
     if suffix_bits == 256:
         return fixed_suffix, fixed_suffix
 
-    high = sage.ZZ.random_element(1 << (256 - suffix_bits))
-    k = (high << suffix_bits) | fixed_suffix
-    return k, fixed_suffix
+    while True:
+        high = sage.ZZ.random_element(1 << (256 - suffix_bits))
+        k = (high << suffix_bits) | fixed_suffix
+        if 1 <= k < N:
+            return k, fixed_suffix
+
+
+def _sample_hash_value():
+    return sage.ZZ.random_element(N)
 
 
 def _make_nonce_sampler(bias_type: str, param: int):
@@ -80,7 +86,7 @@ def generate_biased_signatures(
     private_key: int,
     num_sigs: int = 80,
     bias_type: str = "known_lsb",
-    param: int = 128,
+    param: int = 3,
     output_csv: str = None,
 ):
     """Generate ECDSA signatures with paper-aligned nonce leakage modes."""
@@ -92,8 +98,8 @@ def generate_biased_signatures(
     if output_csv is None:
         output_csv = f"data/raw/biased_signatures_{bias_type}_{param}.csv"
 
-    for i in range(num_sigs):
-        h = sage.ZZ(i) % N
+    for _ in range(num_sigs):
+        h = _sample_hash_value()
         while True:
             k, known_part = sample_nonce()
             signed = _recover_signature_components(d, h, k)

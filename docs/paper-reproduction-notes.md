@@ -8,12 +8,12 @@ The generator supports four nonce leakage families, with `known_lsb` as the defa
 
 1. **`known_lsb`** (default paper-aligned mode)  
    - The lowest `param` bits of each nonce are known (leaked).  
-   - Example: `--bias known_lsb --param 160` → 160 least-significant bits leaked per nonce.  
+   - Example: `--bias known_lsb --param 3 --num 100` → 3 least-significant bits leaked per nonce.  
    - The CSV `known_part` column stores \(\alpha = k \bmod 2^{\text{param}}\).
 
 2. **`known_msb`** (symmetric high-bit leakage mode)  
    - The top `param` bits of each nonce are known (leaked).  
-   - Example: `--bias known_msb --param 160` → 160 most-significant bits leaked per nonce.
+   - Example: `--bias known_msb --param 3 --num 100` → 3 most-significant bits leaked per nonce.
 
 3. **`short`** (most frequent real-world bias)  
    - Nonce \(k\) is chosen uniformly from \([0, 2^{\text{param}}-1]\).  
@@ -26,13 +26,26 @@ The generator supports four nonce leakage families, with `known_lsb` as the defa
 
 Each bias is controlled by the `--param` argument (number of known/leaked bits or bit-length).  
 The CSV output always contains a column `known_part` holding exactly the leaked information for the chosen bias.
-The generator rejects invalid ECDSA edge cases and resamples until every record satisfies \(1 \le k < N\), \(r \ne 0\), and \(s \ne 0\).
+For paper-style experiments, recommended leakage sizes are small, such as `2`, `3`, `4`, or `8` bits.
+Each generated row uses an independently sampled hash representative \(h \in [0, N-1]\).
+The generator samples valid shared-suffix candidates directly and still rejects any remaining ECDSA edge cases until every record satisfies \(1 \le k < N\), \(r \ne 0\), and \(s \ne 0\).
 
 ## Output Format
 - File naming is automatic: `data/raw/biased_signatures_{bias_type}_{param}.csv`  
 - Columns: `r`, `s`, `h`, `known_part`  
 - All signatures satisfy the ECDSA equation \(k \cdot s \equiv h + d \cdot r \pmod{N}\).  
 - Files from different bias types never overwrite each other.
+
+## Paper-Derived Quantities
+
+For the paper's lattice reduction, use a `known_lsb` dataset and compute
+\(t_i = 2^{-\ell} r_i s_i^{-1} \bmod N\) and
+\(u_i = 2^{-\ell} (\alpha_i - s_i^{-1} h_i) \bmod N\),
+where \(\ell\) is the number of leaked least-significant bits and \(\alpha_i = k_i \bmod 2^\ell\).
+
+The script `python3 -m scripts.check_paper_derived_quantities` performs this computation directly.
+For CSV files produced by the current generator, `known_part` already stores this \(\alpha_i\) value.
+The script also verifies that the centered residue of \(a t_i - u_i\) is small, with size bounded by roughly \(N / 2^\ell\).
 
 ## Other Biases That Could Be Added
 
