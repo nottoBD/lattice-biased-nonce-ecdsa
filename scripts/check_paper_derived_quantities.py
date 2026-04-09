@@ -21,69 +21,51 @@ and is bounded by roughly N / 2^ell.
 import argparse
 import csv
 from src.lattice_attack.constants import N
-
-
-DEFAULT_PRIVATE_KEY = 0x123456789ABCDEF0123456789ABCDEF0
-
-
-def centered_mod(value: int, modulus: int) -> int:
-    value %= modulus
-    if value > modulus // 2:
-        value -= modulus
-    return value
+from src.lattice_attack.hnp import (
+    DEFAULT_PRIVATE_KEY,
+    centered_mod,
+    compute_known_lsb_hnp_rows,
+    known_lsb_bound,
+)
 
 
 def compute_quantities(csv_file: str, private_key: int, ell: int):
-    two_inv_ell = pow(pow(2, ell, N), -1, N)
     modulus = 1 << ell if ell else 1
-    smallness_bound = (N - 1) // modulus
     rows = []
 
-    with open(csv_file, newline="") as handle:
-        reader = csv.DictReader(handle)
-        for index, row in enumerate(reader, start=1):
-            r = int(row["r"])
-            s = int(row["s"])
-            h = int(row["h"])
-            known_part = int(row["known_part"])
+    for row in compute_known_lsb_hnp_rows(csv_file=csv_file, ell=ell):
+        residue_mod_n = ((private_key % N) * row["t_i"] - row["u_i"]) % N
+        centered_residue = centered_mod(residue_mod_n, N)
 
-            s_inv = pow(s, -1, N)
-            alpha = known_part % N
-            t_i = (two_inv_ell * r * s_inv) % N
-            u_i = (two_inv_ell * ((alpha - (s_inv * h)) % N)) % N
+        recovered_k = (pow(row["s"], -1, N) * ((row["h"] + (private_key % N) * row["r"]) % N)) % N
+        alpha_matches = (recovered_k % modulus) == row["known_part"] if ell else row["known_part"] == 0
+        quotient_numerator = recovered_k - row["alpha"]
+        quotient_integral = (quotient_numerator % modulus) == 0 if ell else True
+        hidden_quotient = quotient_numerator // modulus if quotient_integral else None
+        is_small = abs(centered_residue) <= known_lsb_bound(ell, N)
+        exact_match = quotient_integral and centered_residue == hidden_quotient
 
-            residue_mod_n = ((private_key % N) * t_i - u_i) % N
-            centered_residue = centered_mod(residue_mod_n, N)
-
-            recovered_k = (s_inv * ((h + (private_key % N) * r) % N)) % N
-            alpha_matches = (recovered_k % modulus) == known_part if ell else known_part == 0
-            quotient_numerator = recovered_k - alpha
-            quotient_integral = (quotient_numerator % modulus) == 0 if ell else True
-            hidden_quotient = quotient_numerator // modulus if quotient_integral else None
-            is_small = abs(centered_residue) <= smallness_bound
-            exact_match = quotient_integral and centered_residue == hidden_quotient
-
-            rows.append(
-                {
-                    "index": index,
-                    "r": r,
-                    "s": s,
-                    "h": h,
-                    "known_part": known_part,
-                    "alpha": alpha,
-                    "t_i": t_i,
-                    "u_i": u_i,
-                    "a_t_minus_u_mod_n": residue_mod_n,
-                    "centered_residue": centered_residue,
-                    "recovered_k": recovered_k,
-                    "alpha_matches": alpha_matches,
-                    "quotient_integral": quotient_integral,
-                    "hidden_quotient": hidden_quotient,
-                    "abs_centered_residue": abs(centered_residue),
-                    "is_small": is_small,
-                    "exact_match": exact_match,
-                }
-            )
+        rows.append(
+            {
+                "index": row["index"],
+                "r": row["r"],
+                "s": row["s"],
+                "h": row["h"],
+                "known_part": row["known_part"],
+                "alpha": row["alpha"],
+                "t_i": row["t_i"],
+                "u_i": row["u_i"],
+                "a_t_minus_u_mod_n": residue_mod_n,
+                "centered_residue": centered_residue,
+                "recovered_k": recovered_k,
+                "alpha_matches": alpha_matches,
+                "quotient_integral": quotient_integral,
+                "hidden_quotient": hidden_quotient,
+                "abs_centered_residue": abs(centered_residue),
+                "is_small": is_small,
+                "exact_match": exact_match,
+            }
+        )
 
     return rows
 
@@ -121,7 +103,7 @@ def print_summary(rows, ell: int):
     alpha_match_count = sum(row["alpha_matches"] for row in rows)
     quotient_integral_count = sum(row["quotient_integral"] for row in rows)
     max_abs_residue = max((row["abs_centered_residue"] for row in rows), default=0)
-    smallness_bound = (N - 1) // (1 << ell if ell else 1)
+    smallness_bound = known_lsb_bound(ell, N)
     passed = total > 0 and small_count == total and exact_count == total and alpha_match_count == total
 
     print(f"\n=== Paper Derived Quantities Check ===")
